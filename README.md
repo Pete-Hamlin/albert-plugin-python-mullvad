@@ -7,6 +7,7 @@ Small extension for controlling [mulllvad-vpn]() app from within albert.
 Clone the repo locally:
 
 ```sh
+git clone https://github.com/Pete-Hamlin/albert-plugin-python-mullvad.git $HOME/.local/share/albert/python/plugins/
 
 ```
 
