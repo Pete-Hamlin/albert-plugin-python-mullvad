@@ -5,8 +5,8 @@ from pathlib import Path
 
 from albert import *
 
-md_iid = "3.0"
-md_version = "2.3"
+md_iid = "4.0"
+md_version = "2.4.0"
 md_name = "Mullvad"
 md_description = "Manage mullvad VPN connections"
 md_license = "MIT"
@@ -18,10 +18,9 @@ md_bin_dependencies = ["mullvad"]
 
 class Plugin(PluginInstance, GlobalQueryHandler):
     VPNConnection = namedtuple("VPNConnection", ["name", "connected"])
-    iconUrls = ["xdg:network-wired"]
-    blockedIcon = ["file:{}".format(Path(__file__).parent / "lock-10.png")]
-    connectIcon = ["file:{}".format(Path(__file__).parent / "lock-9.png")]
-    disconnectIcon = ["file:{}".format(Path(__file__).parent / "lock-1.png")]
+    blocked_icon = Path(__file__).parent / "lock-10.png"
+    connect_icon = Path(__file__).parent / "lock-9.png"
+    disconnect_icon = Path(__file__).parent / "lock-1.png"
 
     def __init__(self):
         PluginInstance.__init__(self)
@@ -33,9 +32,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
         return "mullvad "
 
     def getRelays(self):
-        relayStr = subprocess.check_output(
-            "mullvad relay list", shell=True, encoding="UTF-8"
-        )
+        relayStr = subprocess.check_output("mullvad relay list", shell=True, encoding="UTF-8")
         for relayStr in relayStr.splitlines():
             relay = relayStr.split()
             if relay and self.connection_regex.match(relay[0]):
@@ -44,24 +41,22 @@ class Plugin(PluginInstance, GlobalQueryHandler):
     def getIcon(self, status_string: str):
         match status_string:
             case "Blocked":
-                return self.blockedIcon
+                return lambda: makeImageIcon(self.blocked_icon)
             case "Disconnected":
-                return self.disconnectIcon
+                return lambda: makeImageIcon(self.disconnect_icon)
             case "Connected":
-                return self.connectIcon
+                return lambda: makeImageIcon(self.connect_icon)
             case _:
-                return self.iconUrls
+                return lambda: makeThemeIcon("network-wired")
 
     def defaultItems(self) -> list[StandardItem]:
-        statusStr = subprocess.check_output(
-            "mullvad status", shell=True, encoding="UTF-8"
-        ).strip()
+        statusStr = subprocess.check_output("mullvad status", shell=True, encoding="UTF-8").strip()
         return [
             StandardItem(
                 id="status",
                 text="Status",
                 subtext=statusStr,
-                iconUrls=self.getIcon(statusStr),
+                icon_factory=self.getIcon(statusStr),
                 actions=[
                     Action(
                         "reconnect",
@@ -88,7 +83,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="connect",
                 text="Connect",
                 subtext="Connect to default server",
-                iconUrls=self.connectIcon,
+                icon_factory=lambda: makeImageIcon(self.connect_icon),
                 actions=[
                     Action(
                         "connect",
@@ -101,7 +96,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="disconnect",
                 text="Disconnect",
                 subtext="Disconnect from VPN",
-                iconUrls=self.disconnectIcon,
+                icon_factory=lambda: makeImageIcon(self.disconnect_icon),
                 actions=[
                     Action(
                         "disconnect",
@@ -114,7 +109,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="reconnect",
                 text="Reconnect",
                 subtext="Reconnect to current server",
-                iconUrls=self.blockedIcon,
+                icon_factory=lambda: makeImageIcon(self.blocked_icon),
                 actions=[
                     Action(
                         "reconnect",
@@ -133,7 +128,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
             id=f"vpn-{name}",
             text=name,
             subtext=subtext,
-            iconUrls=self.iconUrls,
+            icon_factory=lambda: makeThemeIcon("network-wired"),
             actions=[
                 Action(
                     "connect",
@@ -148,20 +143,12 @@ class Plugin(PluginInstance, GlobalQueryHandler):
         if query.isValid:
             if query.string.strip():
                 relays = self.getRelays()
-                query.add(
-                    [
-                        item
-                        for item in self.actions()
-                        if query.string.lower() in item.text.lower()
-                    ]
-                )
+                query.add([item for item in self.actions() if query.string.lower() in item.text.lower()])
                 query.add(
                     [
                         self.buildItem(relay)
                         for relay in relays
-                        if all(
-                            q in relay[0].lower() for q in query.string.lower().split()
-                        )
+                        if all(q in relay[0].lower() for q in query.string.lower().split())
                     ]
                 )
             else:
@@ -170,9 +157,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
     def handleGlobalQuery(self, query):
         if query.string.strip():
             return [
-                RankItem(item=item, score=0)
-                for item in self.actions()
-                if query.string.lower() in item.text.lower()
+                RankItem(item=item, score=0) for item in self.actions() if query.string.lower() in item.text.lower()
             ]
         else:
             return []
