@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 from collections import namedtuple
@@ -6,7 +7,7 @@ from pathlib import Path
 from albert import *
 
 md_iid = "4.0"
-md_version = "2.4.0"
+md_version = "2.5.0"
 md_name = "Mullvad"
 md_description = "Manage mullvad VPN connections"
 md_license = "MIT"
@@ -38,25 +39,41 @@ class Plugin(PluginInstance, GlobalQueryHandler):
             if relay and self.connection_regex.match(relay[0]):
                 yield (relay[0], relayStr)
 
-    def getIcon(self, status_string: str):
-        match status_string:
-            case "Blocked":
-                return lambda: makeImageIcon(self.blocked_icon)
-            case "Disconnected":
-                return lambda: makeImageIcon(self.disconnect_icon)
-            case "Connected":
-                return lambda: makeImageIcon(self.connect_icon)
+    def parse_status(self) -> tuple[str, callable]:
+        status = json.loads(subprocess.check_output("mullvad status -j", shell=True, encoding="UTF-8"))
+        state = status.get("state")
+        match state:
+            case "error":
+                substring = "{}: {}".format(state.capitalize(), status["details"]["cause"]["reason"])
+                return substring, lambda: makeImageIcon(self.blocked_icon)
+            case "disconnected":
+                substring = "{}: {} - {}, {}".format(
+                    state.capitalize(),
+                    status["details"]["location"]["ipv4"],
+                    status["details"]["location"]["city"],
+                    status["details"]["location"]["country"],
+                )
+                return substring, lambda: makeImageIcon(self.disconnect_icon)
+            case "connected":
+                substring = "{} to {}: {} - {}, {}".format(
+                    state.capitalize(),
+                    status["details"]["location"]["hostname"],
+                    status["details"]["location"]["ipv4"],
+                    status["details"]["location"]["city"],
+                    status["details"]["location"]["country"],
+                )
+                return substring, lambda: makeImageIcon(self.connect_icon)
             case _:
-                return lambda: makeThemeIcon("network-wired")
+                return "Unparsable result executiong mullvad status -j", lambda: makeThemeIcon("network-wired")
 
     def defaultItems(self) -> list[StandardItem]:
-        statusStr = subprocess.check_output("mullvad status", shell=True, encoding="UTF-8").strip()
+        subtext, icon = self.parse_status()
         return [
             StandardItem(
                 id="status",
                 text="Status",
-                subtext=statusStr,
-                icon_factory=self.getIcon(statusStr),
+                subtext=subtext,
+                icon_factory=icon,
                 actions=[
                     Action(
                         "reconnect",
