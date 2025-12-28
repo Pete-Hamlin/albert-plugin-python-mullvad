@@ -13,6 +13,7 @@ md_description = "Manage mullvad VPN connections"
 md_license = "MIT"
 md_url = "https://github.com/albertlauncher/python"
 md_authors = ["@Pete-Hamlin"]
+md_maintainers = ["@Pete-Hamlin"]
 md_credits = ["@janeklb", "@Bierchermuesli"]
 md_bin_dependencies = ["mullvad"]
 
