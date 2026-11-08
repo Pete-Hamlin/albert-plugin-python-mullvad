@@ -6,8 +6,8 @@ from pathlib import Path
 
 from albert import *
 
-md_iid = "4.0"
-md_version = "2.5.0"
+md_iid = "5.0"
+md_version = "2.6.0"
 md_name = "Mullvad"
 md_description = "Manage mullvad VPN connections"
 md_license = "MIT"
@@ -33,20 +33,29 @@ class Plugin(PluginInstance, GlobalQueryHandler):
     def defaultTrigger(self) -> str:
         return "mullvad "
 
+    def makeIcon(self, icon: Path):
+        return Icon.image(icon)
+
     def getRelays(self):
-        relayStr = subprocess.check_output("mullvad relay list", shell=True, encoding="UTF-8")
+        relayStr = subprocess.check_output(
+            "mullvad relay list", shell=True, encoding="UTF-8"
+        )
         for relayStr in relayStr.splitlines():
             relay = relayStr.split()
             if relay and self.connection_regex.match(relay[0]):
                 yield (relay[0], relayStr)
 
     def parse_status(self) -> tuple[str, callable]:
-        status = json.loads(subprocess.check_output("mullvad status -j", shell=True, encoding="UTF-8"))
+        status = json.loads(
+            subprocess.check_output("mullvad status -j", shell=True, encoding="UTF-8")
+        )
         state = status.get("state")
         match state:
             case "error":
-                substring = "{}: {}".format(state.capitalize(), status["details"]["cause"]["reason"])
-                return substring, lambda: makeImageIcon(self.blocked_icon)
+                substring = "{}: {}".format(
+                    state.capitalize(), status["details"]["cause"]["reason"]
+                )
+                return substring, lambda: self.makeIcon(self.blocked_icon)
             case "disconnected":
                 substring = "{}: {} - {}, {}".format(
                     state.capitalize(),
@@ -54,7 +63,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                     status["details"]["location"]["city"],
                     status["details"]["location"]["country"],
                 )
-                return substring, lambda: makeImageIcon(self.disconnect_icon)
+                return substring, lambda: self.makeIcon(self.disconnect_icon)
             case "connected":
                 substring = "{} to {}: {} - {}, {}".format(
                     state.capitalize(),
@@ -63,9 +72,12 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                     status["details"]["location"]["city"],
                     status["details"]["location"]["country"],
                 )
-                return substring, lambda: makeImageIcon(self.connect_icon)
+                return substring, lambda: self.makeIcon(self.connect_icon)
             case _:
-                return "Unparsable result executiong mullvad status -j", lambda: makeThemeIcon("network-wired")
+                return (
+                    "Unparsable result executiong mullvad status -j",
+                    lambda: makeThemeIcon("network-wired"),
+                )
 
     def defaultItems(self) -> list[StandardItem]:
         subtext, icon = self.parse_status()
@@ -101,7 +113,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="connect",
                 text="Connect",
                 subtext="Connect to default server",
-                icon_factory=lambda: makeImageIcon(self.connect_icon),
+                icon_factory=lambda: self.makeIcon(self.connect_icon),
                 actions=[
                     Action(
                         "connect",
@@ -114,7 +126,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="disconnect",
                 text="Disconnect",
                 subtext="Disconnect from VPN",
-                icon_factory=lambda: makeImageIcon(self.disconnect_icon),
+                icon_factory=lambda: self.makeIcon(self.disconnect_icon),
                 actions=[
                     Action(
                         "disconnect",
@@ -127,7 +139,7 @@ class Plugin(PluginInstance, GlobalQueryHandler):
                 id="reconnect",
                 text="Reconnect",
                 subtext="Reconnect to current server",
-                icon_factory=lambda: makeImageIcon(self.blocked_icon),
+                icon_factory=lambda: self.makeIcon(self.blocked_icon),
                 actions=[
                     Action(
                         "reconnect",
@@ -157,25 +169,33 @@ class Plugin(PluginInstance, GlobalQueryHandler):
             ],
         )
 
-    def handleTriggerQuery(self, query):
-        if query.isValid:
-            if query.string.strip():
-                relays = self.getRelays()
-                query.add([item for item in self.actions() if query.string.lower() in item.text.lower()])
-                query.add(
-                    [
-                        self.buildItem(relay)
-                        for relay in relays
-                        if all(q in relay[0].lower() for q in query.string.lower().split())
-                    ]
-                )
-            else:
-                query.add(self.defaultItems())
+    def items(self, ctx):
+        if query_string := ctx.query.strip():
+            relays = self.getRelays()
 
-    def handleGlobalQuery(self, query):
-        if query.string.strip():
+            items = [
+                        item
+                        for item in self.actions()
+                        if query_string.lower() in item.text.lower()
+                    ]
+            items + [
+                    self.buildItem(relay)
+                    for relay in relays
+                    if all(
+                        q in relay[0].lower() for q in query_string.lower().split()
+                        )
+                    ]
+            yield items
+
+        else:
+            yield self.defaultItems()
+
+    def rankItems(self, ctx):
+        if query_string := ctx.query.strip():
             return [
-                RankItem(item=item, score=0) for item in self.actions() if query.string.lower() in item.text.lower()
+                RankItem(item=item, score=0)
+                for item in self.actions()
+                if query_string.lower() in item.text.lower()
             ]
         else:
             return []
